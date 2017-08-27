@@ -96,15 +96,14 @@ LIBS:mysensors_radios
 LIBS:MTCH105
 LIBS:touch
 LIBS:MTCH102
-LIBS:Livolo_EU_1Gang_1way-cache
 EELAYER 25 0
 EELAYER END
 $Descr A3 16535 11693
 encoding utf-8
 Sheet 1 1
 Title "Linovo_EU_1Gang_1way.sch"
-Date "2017-08-05"
-Rev "v1.0beta"
+Date "2017-08-27"
+Rev "v1.1beta"
 Comp ""
 Comment1 "VL-C701X-2 VER C0"
 Comment2 "LIVOLO EU 1 GANG 1 WAY "
@@ -425,7 +424,7 @@ Text Label 5700 8800 0    65   ~ 0
 CSN
 Text Label 8950 4650 2    65   ~ 0
 CSN
-Text Label 8950 4150 2    65   ~ 0
+Text Label 8950 4250 2    65   ~ 0
 LED1
 Text Label 8950 3750 2    65   ~ 0
 IRQ
@@ -507,8 +506,6 @@ F 3 "" H 10000 4950 50  0001 C CNN
 	1    10000 4950
 	-1   0    0    1   
 $EndComp
-Text Label 8950 4250 2    65   ~ 0
-MTPM
 $Comp
 L LED D2
 U 1 1 58DFD5EB
@@ -672,8 +669,6 @@ Text Label 15650 2600 2    65   ~ 0
 TOUCH_L
 Text Label 15650 2800 2    65   ~ 0
 MTSA
-Text Label 12900 2800 2    65   ~ 0
-MTPM
 $Comp
 L Touch U6
 U 1 1 597D6679
@@ -953,7 +948,7 @@ Wire Wire Line
 Wire Wire Line
 	12900 2500 13000 2500
 Wire Wire Line
-	12950 2350 12950 2500
+	12950 2350 12950 2800
 Connection ~ 12950 2500
 Connection ~ 15050 2800
 Wire Wire Line
@@ -994,13 +989,9 @@ Text Label 8950 4050 2    65   ~ 0
 L1_SET
 Wire Wire Line
 	8450 4050 8950 4050
-Text Label 8950 3150 2    65   ~ 0
+Text Label 8950 4150 2    65   ~ 0
 MTSA
-Wire Wire Line
-	8950 3150 8450 3150
 NoConn ~ 8450 3250
-Wire Wire Line
-	8950 4250 8450 4250
 NoConn ~ 10950 8750
 Wire Wire Line
 	12450 1900 12550 1900
@@ -1049,7 +1040,10 @@ Wire Wire Line
 Wire Wire Line
 	12500 2700 13000 2700
 Wire Wire Line
-	13000 2800 12900 2800
-Wire Wire Line
 	14500 2700 14600 2700
+Wire Wire Line
+	12950 2800 13000 2800
+Wire Wire Line
+	8950 4250 8450 4250
+NoConn ~ 8450 3150
 $EndSCHEMATC
