@@ -8,7 +8,7 @@ You have just to build this node and replace the front plate of your Livolo EU S
 
 This node is compatible with livolo **EU VL-C701X-2 VER:C0**
 
-![structure] (https://user-images.githubusercontent.com/11009185/29748572-8e52dde0-8b19-11e7-8774-e402b6bb6ec6.jpg)
+![structure](https://user-images.githubusercontent.com/11009185/29748572-8e52dde0-8b19-11e7-8774-e402b6bb6ec6.jpg)
 
 
 
