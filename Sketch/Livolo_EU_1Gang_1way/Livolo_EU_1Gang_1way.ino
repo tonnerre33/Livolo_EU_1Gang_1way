@@ -1,14 +1,15 @@
 //Fuse L:E2 H:DA E:05
 //// Enable and select radio type attached
 #define MY_RADIO_NRF24
+#define MY_RF24_PA_LEVEL (RF24_PA_LOW)
 //#define MY_RADIO_RFM69
 
 
 //#define MY_DEBUG
 //#define MY_OTA_FIRMWARE_FEATURE  // Enables OTA firmware updates if DualOptiBoot
 
-#define MY_NODE_ID 4
-//#define MY_DISABLED_SERIAL
+//#define MY_NODE_ID 121
+#define MY_DISABLED_SERIAL
 //#define MY_TRANSPORT_WAIT_READY_MS 1000
 /*#define MY_PARENT_NODE_ID 0
 #define MY_PARENT_NODE_IS_STATIC*/
@@ -19,7 +20,7 @@
 #define NUMBER_OF_BUTTONS 1 // Total number of attached relays
 
 // ID of the settings block
-#define CONFIG_VERSION "003"
+#define CONFIG_VERSION "001"
 
 // Tell it where to store your config data in EEPROM
 // mysensors api uses eeprom addresses including 512 so we pick 514 for safety
@@ -38,7 +39,7 @@ struct StoreStruct {
     // they are stored completely.
 } settings = {
     // The default values
-    60, //button_sensiblity
+    50, //button_sensiblity
     {60}, //auto off lamp {left, right} seconds
     {1}, // mode button {left, right} 0=MODE_EVENT_TRIGGER, 1=MODE_EVENT_INSTANT
     {1}, // mode by default {left, right} 0=MODE_NORMAL 0, 1=MODE_TIMER, 2=MODE_CLEANING
@@ -75,7 +76,7 @@ const uint32_t SUCCESSIVE_SENSOR_DATA_SEND_DELAY_MS = 100;
 long buttonLastChange[] = {OFF, OFF};
 uint8_t channelState[] = {OFF, OFF};
 bool changedStates[] = {false, false};
-bool trigger = false;
+bool trigger[] = {false};
 uint32_t lastSwitchLight = -1;
 uint32_t lastOnCde[NUMBER_OF_BUTTONS];
 uint32_t lastMode;
@@ -94,19 +95,7 @@ const uint32_t SENSOR_DATA_SEND_RETRIES_MAX_INTERVAL_MS = 50;
 
 uint8_t MODE[] = {settings.mode_def[0], settings.mode_def[1]};
 
-MyMessage msgdebug(1, V_TEXT);
-
-
-// ------------------------------------------ SUPPLY VOLTAGE STATUS SECTION ---------------------------------
-const uint32_t POWER_SUPPLY_VOLTAGE_LVL_REPORT_INTERVAL_MS = 100000;  // 1min(1 * 60 * 1000)
-
-#include <Vcc.h>
-
-const float VccMin        = 0;  // Minimum expected Vcc level, in Volts
-const float VccMax        = 3.0;  // Maximum expected Vcc level, in Volts
-const float VccCorrection = 0.891;  // Measured Vcc by multimeter divided by reported Vcc 3.87/3.67
-
-Vcc vcc(VccCorrection);
+//MyMessage msgdebug(4, V_TEXT);
 
 void loadConfig() {
     // To make sure there are settings, and they are YOURS!
@@ -141,6 +130,7 @@ void before()
     wdt_disable();
     wdt_enable(WDTO_8S);
 
+    loadConfig(); 
     // initialize led, relays pins as outputs and buttons as inputs
 
     //SENSIBILITY
@@ -152,8 +142,6 @@ void before()
     for (int i = 0; i < NUMBER_OF_BUTTONS; i++) {
         //LEDS
         pinMode(ledPins[i], OUTPUT);
-        blinkLedFastly(3, ledPins[i]);
-        digitalWrite(ledPins[i],  loadState(i+1));
         //BUTTONS
         pinMode(buttonPins[i], INPUT);
         digitalWrite(buttonPins[i], HIGH);       // turn on pullup resistors
@@ -161,10 +149,10 @@ void before()
         for (int j = 0; j < 2; j++) {
             pinMode(RELAY_CH_PINS[i][j], OUTPUT);
         }
+		
         //LOAD PREVIOUS STATE
+        digitalWrite(ledPins[i],  loadState(i+1));
         channelState[i] = loadState(i+1);
-
-
     }
 
 
@@ -178,22 +166,21 @@ void presentation()
     // Register sensors to gateway
     for (int j = 0; j < NUMBER_OF_BUTTONS; j++) {
         present(j+1, S_BINARY);
-        delay(SUCCESSIVE_SENSOR_DATA_SEND_DELAY_MS);
+        wait(SUCCESSIVE_SENSOR_DATA_SEND_DELAY_MS);
+        blinkNumberOutput(3,ledPins[j],150 ,150);
     }
     present(3, S_INFO);
-    delay(SUCCESSIVE_SENSOR_DATA_SEND_DELAY_MS);
+    wait(SUCCESSIVE_SENSOR_DATA_SEND_DELAY_MS);
 
 }
 
+boolean newSettings = false;
 void receive(const MyMessage &message)
 {
 
 
     const byte numChars = 32;
     char receivedChars[numChars];   // an array to store the received data
-    char paramName[20];
-    char paramValue[10];
-    boolean newSettings = false;
 
     switch (message.type) {
 
@@ -210,75 +197,9 @@ void receive(const MyMessage &message)
           }*/
         break;
     case V_VAR1:
-        if (message.getCommand() == C_SET) {
+        if (message.getCommand() == C_SET) {        
             strncpy(receivedChars, message.getString(), numChars);
-            strncpy(paramName, strtok(receivedChars, "="),20);
-            strncpy(paramValue, strtok(NULL, "="),10);
-
-            if(strcmp(paramName,"button_sensiblity") == 0) {
-                settings.button_sensiblity =  (uint8_t)atoi(paramValue) ;
-                analogWrite(MTSA_PIN, 255 - settings.button_sensiblity * 255/100);
-                sendData(message.sensor, settings.button_sensiblity, V_VAR1);
-                newSettings = true;
-                // Serial.println(settings[0]);
-            }
-            if(strcmp(paramName,"mode_timer_s") == 0) {
-                char paramValueTmp[10];
-                for (uint8_t i = 0; i < NUMBER_OF_BUTTONS; i++) {
-                    if(i==0) {
-                        strncpy(paramValueTmp, strtok(paramValue, ","),10);
-                    }
-                    else {
-                        strncpy(paramValueTmp, strtok(NULL, ","),10);
-                    }
-
-                    settings.mode_timer_s[i] = (uint16_t)atoi(paramValueTmp);
-                    sendData(i, settings.mode_timer_s[i], V_VAR1);
-                    newSettings = true;
-                    //Serial.println(settings.mode_timer_s[i]);
-                }
-            }
-            if(strcmp(paramName,"button_mode") == 0) {
-                char paramValueTmp[10];
-                for (uint8_t i = 0; i < NUMBER_OF_BUTTONS; i++) {
-                    if(i==0) {
-                        strncpy(paramValueTmp, strtok(paramValue, ","),10);
-                    }
-                    else {
-                        strncpy(paramValueTmp, strtok(NULL, ","),10);
-                    }
-
-                    settings.button_mode[i] = (uint8_t)atoi(paramValueTmp);
-                    sendData(i, settings.button_mode[i], V_VAR1);
-                    newSettings = true;
-                    //Serial.println(settings.button_mode[i]);
-                }
-            }
-            if(strcmp(paramName,"mode_def") == 0) {
-                char paramValueTmp[10];
-                for (uint8_t i = 0; i < NUMBER_OF_BUTTONS; i++) {
-                    if(i==0) {
-                        strncpy(paramValueTmp, strtok(paramValue, ","),10);
-                    }
-                    else {
-                        strncpy(paramValueTmp, strtok(NULL, ","),10);
-                    }
-
-                    settings.mode_def[i] = (uint8_t)atoi(paramValueTmp);
-                    sendData(i, settings.mode_def[i], V_VAR1);
-                    newSettings = true;
-                    //Serial.println(settings.button_mode[i]);
-                }
-            }
-            if( newSettings == true && strcmp(receivedChars, "save_settings") == 0) {
-                saveConfig();
-                wait(100);
-                send(msgdebug.setSensor(4).set("config saved"));
-
-                // Serial.println("config saved");
-
-                newSettings = false;
-            }
+            settingsUpdate(&receivedChars[0]);   
         }
         break;
     default:
@@ -305,7 +226,7 @@ void switchLight(int sensorID, bool newStatus) {
 }
 
 char buf[25];
-static uint32_t lastTouchTimestamp[NUMBER_OF_BUTTONS];
+uint32_t lastTouchTimestamp[NUMBER_OF_BUTTONS];
 
 void loop() {
     // put your main code here, to run repeatedly:
@@ -321,10 +242,11 @@ void loop() {
             changedStates[i]  = false;
         }
 
-        if((millis() - lastSwitchLight) >= 3000 && trigger == true && changedStates[i] == false) {
+        if((millis() - lastSwitchLight) >= 3000 && trigger[i] == true && changedStates[i] == false) {
             //send(msgdebug.setSensor(4).set(buf));
-            send(msgdebug.setSensor(3).set(lastTouchTimestamp[i]));
-            trigger  = false;
+            sendData(3, lastTouchTimestamp[i], V_TEXT);
+            //send(msgdebug.setSensor(3).set(lastTouchTimestamp[i]));
+            trigger[i] = false;
         }
 
         if((millis() - lastOnCde[i] ) >= settings.mode_timer_s[i]*1000 && channelState[i]== ON && MODE[i] == MODE_TIMER) {
@@ -333,21 +255,17 @@ void loop() {
         if((millis() - lastMode) >= MODE_CLEANING_MS && MODE[i] == MODE_CLEANING) {
             MODE[0] = settings.mode_def[0];
             MODE[1] = settings.mode_def[1];
-            BipBuzzerFastly(1, BUZZER_PIN);
+            blinkNumberOutput(1, BUZZER_PIN,100,100);
+             for (int i = 0; i < NUMBER_OF_BUTTONS; i++) {
+                digitalWrite(ledPins[i],  getChannelState(i));
+             }
+        }
+        if(MODE[i] == MODE_CLEANING && i==0){
+          blinkEvery(ledPins, 1000,1000);
+          wait(10);     //Fix blink in cleaning mode 
         }
     }
-
-    // send power supply voltage level
-    static uint32_t lastPowerSupplyVoltageLvlReportTimestamp;
-    float v = vcc.Read_Volts();
-    //if((millis() - lastPowerSupplyVoltageLvlReportTimestamp >= POWER_SUPPLY_VOLTAGE_LVL_REPORT_INTERVAL_MS) && v > 3.39) {
-    if(v > 3.39) {
-        send(msgdebug.setSensor(4).set(int(v*100)));
-        lastPowerSupplyVoltageLvlReportTimestamp = millis();
-        wait(500);
-    }
-
-
+  
 }
 
 void checkTouchSensor() {
@@ -379,7 +297,7 @@ void checkTouchSensor() {
                         switchLight(i+1, channelState[i]);
                         EndWaitFalseTrigger[i] = true;
                     } else {
-                        BipBuzzerFastly(1, BUZZER_PIN);
+                        blinkNumberOutput(1, BUZZER_PIN,100,100);
                     }
                 }
             }
@@ -395,7 +313,7 @@ void checkTouchSensor() {
             snprintf(buf, sizeof buf, "RELEASED %02d TIME %02d", i, lastTouchTimestamp[i]);
             //send(msgdebug.setSensor(3).set(lastTouchTimestamp[i]));
             //wait(SUCCESSIVE_SENSOR_DATA_SEND_DELAY_MS);
-            trigger = true;
+            trigger[i] = true;
 
             if(MODE[i] != MODE_CLEANING) {
                 //MODE_EVENT_TRIGGER
@@ -408,13 +326,20 @@ void checkTouchSensor() {
                         switchLight(i+1, channelState[i]);
                     }
 
-                    if(lastTouchTimestamp[i] >= LONG_TOUCH_DETECT_THRESHOLD_MS && MODE[i] != MODE_NORMAL) {
+                    if(lastTouchTimestamp[i] >= LONG_TOUCH_DETECT_THRESHOLD_MS && lastTouchTimestamp[i] < LONG_TOUCH_DETECT_CLEANING_MS) {
                         MODE[i] = MODE_NORMAL;
                         channelState[i] = ON;
                         switchLight(i+1, channelState[i]); // No buzzer on the sleep power
-                        BipBuzzerFastly(2, BUZZER_PIN);
+                        blinkNumberOutput(2, BUZZER_PIN,100,100);
                     }
-
+                    if(lastTouchTimestamp[i] >= LONG_TOUCH_DETECT_CLEANING_MS) {
+                        MODE[0] = MODE_CLEANING;
+                        MODE[1] = MODE_CLEANING;
+                        lastMode = millis();
+                        channelState[i] = ON;
+                        switchLight(i+1, channelState[i]); // No buzzer on the sleep power 
+                        blinkNumberOutput(1, BUZZER_PIN,100,100);
+                    }
                 }
             }
             // latch in RELEASED state
@@ -427,14 +352,14 @@ void checkTouchSensor() {
                 if(millis() - lastTouchTimestamp[i] >= LONG_TOUCH_DETECT_THRESHOLD_MS && MODE[i] != MODE_NORMAL
                         && channelState[i] == ON) { // No buzzer on the sleep power
                     MODE[i] = MODE_NORMAL;
-                    BipBuzzerFastly(2, BUZZER_PIN);
+                    blinkNumberOutput(2, BUZZER_PIN,100,100);
                 }
                 if(millis() - lastTouchTimestamp[i] >= LONG_TOUCH_DETECT_CLEANING_MS && MODE[i] != MODE_CLEANING
                         && channelState[i] == ON) { // No buzzer on the sleep power
                     MODE[0] = MODE_CLEANING;
                     MODE[1] = MODE_CLEANING;
                     lastMode = millis();
-                    BipBuzzerFastly(1, BUZZER_PIN);
+                    blinkNumberOutput(1, BUZZER_PIN,100,100);
                 }
 
             }
@@ -455,7 +380,6 @@ void setChannelRelaySwitchState(uint8_t channel, uint8_t newState) {
         hwDigitalWrite(RELAY_CH_PINS[channel][SET_COIL_INDEX], HIGH);
         wait(RELAY_PULSE_DELAY_MS);
         hwDigitalWrite(RELAY_CH_PINS[channel][SET_COIL_INDEX], LOW);
-        //wait(RELAY_PULSE_DELAY_MS);
         channelState[channel] = ON;
         digitalWrite(ledPins[channel], channelState[channel]);
 
@@ -464,7 +388,6 @@ void setChannelRelaySwitchState(uint8_t channel, uint8_t newState) {
         hwDigitalWrite(RELAY_CH_PINS[channel][RESET_COIL_INDEX], HIGH);
         wait(RELAY_PULSE_DELAY_MS);
         hwDigitalWrite(RELAY_CH_PINS[channel][RESET_COIL_INDEX], LOW);
-        //wait(RELAY_PULSE_DELAY_MS);
         channelState[channel] = OFF;
         digitalWrite(ledPins[channel], channelState[channel]);
     }
@@ -478,8 +401,16 @@ void setChannelRelaySwitchState(uint8_t channel, uint8_t newState) {
 
 void sendData(uint8_t sensorId, uint8_t sensorData, uint8_t dataType) {
     MyMessage sensorDataMsg(sensorId, dataType);
-
     for (uint8_t retries = 0; !send(sensorDataMsg.set(sensorData), true) &&
+            (retries < SENSOR_DATA_SEND_RETRIES); ++retries) {
+        // random wait interval between retries for collisions
+        wait(random(SENSOR_DATA_SEND_RETRIES_MIN_INTERVAL_MS,
+                    SENSOR_DATA_SEND_RETRIES_MAX_INTERVAL_MS));
+    }
+}
+void sendData(uint8_t sensorId, String sensorData, uint8_t dataType) {
+    MyMessage sensorDataMsg(sensorId, dataType);
+    for (uint8_t retries = 0; !send(sensorDataMsg.set(sensorData.c_str()), true) &&
             (retries < SENSOR_DATA_SEND_RETRIES); ++retries) {
         // random wait interval between retries for collisions
         wait(random(SENSOR_DATA_SEND_RETRIES_MIN_INTERVAL_MS,
@@ -489,45 +420,146 @@ void sendData(uint8_t sensorId, uint8_t sensorData, uint8_t dataType) {
 
 
 /**************************************************************************************/
-/* Allows to fastly blink the buzzer.                                                    */
-/**************************************************************************************/
-void BipBuzzerFastly(byte loop, byte pinToBlink)
-{
-    byte delayOn = 100;
-    byte delayOff = 100;
-    for (int i = 0; i < loop; i++)
-    {
-        blinkLed(pinToBlink, delayOn);
-        wait(delayOff);
-    }
-}
-
-/**************************************************************************************/
-/* Allows to fastly blink the LED.                                                    */
+/* Allows to fastly blink an output.                                                  */
 /**************************************************************************************/
 //Don't use wait() before init radio (void before)
-void blinkLedFastly(byte loop, byte pinToBlink)
+void blinkNumberOutput(byte loop, byte pinToBlink, int delayOnInMs, int delayOffInMs)
 {
-    byte delayOn = 150;
-    byte delayOff = 150;
     for (int i = 0; i < loop; i++)
     {
-        blinkLed(pinToBlink, delayOn);
-        delay(delayOff);
+        digitalWrite(pinToBlink,HIGH);
+        wait(delayOnInMs);
+        digitalWrite(pinToBlink,LOW);
+        wait(delayOffInMs);
     }
 }
-
-
 /**************************************************************************************/
-/* Allows to blink a LED.                                                             */
+/* Blink output every xx ms                                                           */
 /**************************************************************************************/
-void blinkLed(byte pinToBlink, int delayInMs)
+//Don't use wait() before init radio (void before)
+bool changeBlinkState = false;
+void blinkEvery(int pinToBlink[], int delayOnInMs, int delayOffInMs)
 {
-    digitalWrite(pinToBlink,HIGH);
-    delay(delayInMs);
-    digitalWrite(pinToBlink,LOW);
+  static uint32_t lastBlinkTimestamp;
+  
+  for (int i = 0; i < sizeof(pinToBlink); i++) {
+      if(millis() - lastBlinkTimestamp > delayOnInMs && digitalRead(pinToBlink[i]) ){
+
+            digitalWrite(pinToBlink[i],LOW);
+            changeBlinkState = true;
+            continue;
+      }
+      if(millis() - lastBlinkTimestamp > delayOffInMs && !digitalRead(pinToBlink[i]) ){
+            digitalWrite(pinToBlink[i],HIGH);
+            changeBlinkState = true;
+      }
+  }
+  if(changeBlinkState){       
+    lastBlinkTimestamp = millis();
+    changeBlinkState = false;
+  }
 }
 
+void settingsUpdate(char *pReceveivedChars){
 
+char paramName[20];
+char paramValue[10];
+char buf[25];
+
+    strncpy(paramName, strtok(pReceveivedChars, "="),20);
+    strncpy(paramValue, strtok(NULL, "="),10);
+    
+      if(strcmp(paramName, "button_sensiblity") == 0) {
+         updateVariable(&settings.button_sensiblity, paramValue);
+      }
+
+      char paramValueTmp[10];
+      for (uint8_t i = 0; i < NUMBER_OF_BUTTONS; i++) {
+        if(i==0){strncpy(paramValueTmp, strtok(paramValue, ","),10);}
+        else{strncpy(paramValueTmp, strtok(NULL, ","),10);}
+
+         if(strcmp(paramName,"mode_timer_s") == 0) {
+           updateVariable(&settings.mode_timer_s[i], paramValueTmp);
+         }
+         if(strcmp(paramName,"button_mode") == 0) {
+           updateVariable(&settings.button_mode[i], paramValueTmp);
+         }        
+          
+      }    
+      
+    if(strcmp(pReceveivedChars, "save_settings") == 0){
+      if(newSettings == true){
+        saveConfig();
+        sendData(4, "config_saved", V_TEXT); //No spaces in the text cause crash the gateway in mysensors 2.2.0-rc.1
+       newSettings = false;
+      }else{
+        sendData(4, "no_changes", V_TEXT);
+      }
+    }
+ 
+    if(strcmp(pReceveivedChars, "print_settings") == 0){
+
+       printSetting(&settings.button_sensiblity, 0, "button_sensiblity","%d");
+       printSetting(&settings.mode_timer_s, NUMBER_OF_BUTTONS, "mode_timer_s","%d");
+       printSetting(&settings.button_mode, NUMBER_OF_BUTTONS, "button_mode","%d");
+        
+    }
+
+}
+
+// Generic catch-all implementation.
+template <typename T_ty> struct TypeInfo { static const char * name; };
+template <typename T_ty> const char * TypeInfo<T_ty>::name = "unknown";
+
+// Handy macro to make querying stuff easier.
+#define TYPE_NAME(var) TypeInfo< typeof(var) >::name
+
+// Handy macro to make defining stuff easier.
+#define MAKE_TYPE_INFO(type)  template <> const char * TypeInfo<type>::name = #type;
+
+// Type-specific implementations.
+MAKE_TYPE_INFO( int )
+MAKE_TYPE_INFO( float )
+MAKE_TYPE_INFO( short )
+MAKE_TYPE_INFO( uint8_t )
+MAKE_TYPE_INFO( uint16_t )
+
+
+template <typename T_type> T_type updateVariable(T_type *pVariable, char value[10]){
+
+
+      if(strcmp(TYPE_NAME(*pVariable), "uint8_t") == 0){
+          *pVariable =  (uint8_t)atoi(value);
+      }
+      if(strcmp(TYPE_NAME(*pVariable), "uint16_t") == 0){
+          *pVariable =  (uint16_t)atoi(value);
+      } 
+       sendData(4, *pVariable, V_TEXT);
+       newSettings = true;
+      
+
+}
+template <typename T_type> void  printSetting(T_type *pVariable, int numberArray, String variableName, String stringFormat){
+  char buf[25];
+  String message = variableName + "=" + stringFormat;
+  if(numberArray == 0){
+        snprintf(buf, sizeof buf, message.c_str() ,*pVariable);
+  }else{
+       
+        for (uint8_t i = 0; i < numberArray; i++) {
+         if(strcmp(variableName.c_str(), "mode_timer_s") == 0){
+            if(i==0)   {   snprintf(buf, sizeof buf, message.c_str(), *((uint16_t*)pVariable+i));}
+            else {snprintf(buf + strlen(buf), 25 - strlen(buf), (","+stringFormat).c_str(),*((uint16_t*)pVariable+i));}
+          }
+          else{
+            if(i==0)   {   snprintf(buf, sizeof buf, message.c_str(), *((uint8_t*)pVariable+i));}
+            else {snprintf(buf + strlen(buf), 25 - strlen(buf), (","+stringFormat).c_str(),*((uint8_t*)pVariable+i));}
+          }          
+        }    
+  }
+
+        sendData(4, buf, V_TEXT);
+
+}
 
 
