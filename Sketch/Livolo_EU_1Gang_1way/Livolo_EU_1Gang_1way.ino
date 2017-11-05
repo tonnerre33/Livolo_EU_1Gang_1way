@@ -10,7 +10,7 @@
 
 //#define MY_NODE_ID 121
 #define MY_DISABLED_SERIAL
-//#define MY_TRANSPORT_WAIT_READY_MS 1000
+#define MY_TRANSPORT_WAIT_READY_MS 10000
 /*#define MY_PARENT_NODE_ID 0
 #define MY_PARENT_NODE_IS_STATIC*/
 #include <MySensors.h>
@@ -265,7 +265,6 @@ void loop() {
           wait(10);     //Fix blink in cleaning mode 
         }
     }
-  
 }
 
 void checkTouchSensor() {
@@ -561,5 +560,3 @@ template <typename T_type> void  printSetting(T_type *pVariable, int numberArray
         sendData(4, buf, V_TEXT);
 
 }
-
-
